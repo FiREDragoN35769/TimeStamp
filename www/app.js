@@ -51,9 +51,7 @@ function compactRows(rows) {
 function loadDays() {
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-    if (!parsed || typeof parsed !== 'object') return {};
-    Object.keys(parsed).forEach(key => { parsed[key] = compactRows(parsed[key]); });
-    return parsed;
+    return parsed && typeof parsed === 'object' ? parsed : {};
   } catch {
     return {};
   }
@@ -65,8 +63,7 @@ function saveDays() {
 
 function getRowsForCurrentDay() {
   const key = dateKey(currentDate);
-  if (!Array.isArray(days[key])) days[key] = emptyDay();
-  days[key] = compactRows(days[key]);
+  if (!Array.isArray(days[key]) || !days[key].length) days[key] = emptyDay();
   return days[key];
 }
 
