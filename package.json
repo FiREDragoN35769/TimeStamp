@@ -12,5 +12,10 @@
   },
   "devDependencies": {
     "@capacitor/cli": "6.2.1"
+  },
+  "overrides": {
+    "@capacitor/android": "6.2.1",
+    "@capacitor/core": "6.2.1",
+    "@capacitor/cli": "6.2.1"
   }
 }
