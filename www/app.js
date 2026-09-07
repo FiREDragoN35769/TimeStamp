@@ -38,17 +38,14 @@ function dayTotal(rows){let total=0,invalid=false;rows.forEach(entry=>{const min
 function renderTotalsOnly(){const rows=getRowsForCurrentDay(),{total,invalid}=dayTotal(rows);totalHM.textContent=hm(total);totalDecimal.textContent=decimal(total);error.textContent=invalid?'One or more times are not valid yet.':'';[...rowsEl.querySelectorAll('.data-row')].forEach((row,index)=>{const mins=workedMinutes(rows[index]),hours=row.querySelector('.row-hours');hours.textContent=Number.isFinite(mins)?hm(mins):'—';hours.classList.toggle('bad',!Number.isFinite(mins));});}
 function changeDay(delta){currentDate.setDate(currentDate.getDate()+delta);currentDate=startOfDay(currentDate);renderDay();}
 
-function addTimeRow(){
+function addTimeFromNavigation(){
+  const params=new URLSearchParams(window.location.search);
+  if(params.get('add')!=='1') return;
   const key=dateKey(currentDate);
   const existing=Array.isArray(days[key])&&days[key].length?days[key]:emptyDay();
   days[key]=[...existing,{in:'',out:''}];
   saveDays();
-  renderDay();
-  setTimeout(()=>{
-    const all=rowsEl.querySelectorAll('.data-row input');
-    const target=all[all.length-2];
-    if(target){target.scrollIntoView({block:'center'});target.focus();}
-  },50);
+  if(window.history&&history.replaceState) history.replaceState({},'', 'index.html');
 }
 
 function renderSummary(){document.querySelector('.timesheet-card').classList.add('hidden');summaryView.classList.remove('hidden');summaryList.innerHTML='';const entries=Object.entries(days).map(([key,rows])=>({key,rows:compactRows(rows)})).filter(({rows})=>rows.some(r=>r.in||r.out)).sort((a,b)=>a.key.localeCompare(b.key));let grand=0;if(!entries.length)summaryList.innerHTML='<p class="empty">No time entered yet.</p>';entries.forEach(({key,rows})=>{const date=new Date(`${key}T00:00:00`),{total}=dayTotal(rows);grand+=total;const used=rows.filter(r=>r.in||r.out);const block=document.createElement('article');block.className='summary-day';block.innerHTML=`<div class="summary-day-head"><strong>${formatDate(date)}</strong></div><div class="summary-table"><div class="summary-columns"><span>#</span><span>IN</span><span>OUT</span><strong>HOURS</strong></div>${used.map((r,i)=>`<div><span>${i+1}</span><span>${escapeHtml(r.in||'')}</span><span>${escapeHtml(r.out||'')}</span><strong>${Number.isFinite(workedMinutes(r))?hm(workedMinutes(r)):'—'}</strong></div>`).join('')}<div class="day-total-row"><span></span><span></span><span>Day Total</span><strong>${hm(total)}</strong></div><div class="day-total-row decimal-row"><span></span><span></span><span>Decimal</span><strong>${decimal(total)}</strong></div></div>`;summaryList.appendChild(block);});grandHM.textContent=hm(grand);grandDecimal.textContent=decimal(grand);}
@@ -60,19 +57,5 @@ finishBtn.addEventListener('click',renderSummary);
 backToDay.addEventListener('click',renderDay);
 clearDay.addEventListener('click',()=>{days[dateKey(currentDate)]=emptyDay();saveDays();renderDay();});
 
-// Delegate the Add button at document level so Android WebView cannot lose the handler
-// when focus/keyboard events occur. Pointer events cover touch and stylus; click is fallback.
-let addHandledAt=0;
-function handleAddEvent(event){
-  const button=event.target.closest&&event.target.closest('#addTimeBtn');
-  if(!button)return;
-  event.preventDefault();
-  const now=Date.now();
-  if(now-addHandledAt<400)return;
-  addHandledAt=now;
-  addTimeRow();
-}
-document.addEventListener('pointerup',handleAddEvent,false);
-document.addEventListener('click',handleAddEvent,false);
-
+addTimeFromNavigation();
 renderDay();
