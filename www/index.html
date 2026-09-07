@@ -24,6 +24,10 @@
       </div>
       <div id="rows" class="rows"></div>
 
+      <div class="add-row-wrap">
+        <button id="addTimeBtn" type="button" class="add-time">+ Add new time</button>
+      </div>
+
       <div class="totals">
         <div><span>Total</span><strong id="totalHM">0:00</strong></div>
         <div><span>Decimal</span><strong id="totalDecimal">0.00</strong></div>
@@ -40,15 +44,15 @@
       <div class="summary-head">
         <div>
           <h2>All Days</h2>
-          <p>Every saved day, stacked in order.</p>
+          <p>Every saved day with vertical totals.</p>
         </div>
         <button id="backToDay" type="button" class="secondary small">Back</button>
       </div>
       <div id="summaryList" class="summary-list"></div>
       <div class="grand-total">
-        <span>Grand Total</span>
-        <strong id="grandHM">0:00</strong>
-        <strong id="grandDecimal">0.00</strong>
+        <span>All Days Total</span>
+        <div><small>H:MM</small><strong id="grandHM">0:00</strong></div>
+        <div><small>Decimal</small><strong id="grandDecimal">0.00</strong></div>
       </div>
     </section>
   </main>
