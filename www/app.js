@@ -1,4 +1,3 @@
-const ROW_COUNT = 10;
 const STORAGE_KEY = 'timestamp.days.v2';
 
 const dayTitle = document.getElementById('dayTitle');
@@ -7,6 +6,7 @@ const totalHM = document.getElementById('totalHM');
 const totalDecimal = document.getElementById('totalDecimal');
 const prevDay = document.getElementById('prevDay');
 const nextDay = document.getElementById('nextDay');
+const addTimeBtn = document.getElementById('addTimeBtn');
 const clearDay = document.getElementById('clearDay');
 const finishBtn = document.getElementById('finishBtn');
 const summaryView = document.getElementById('summaryView');
@@ -39,13 +39,21 @@ function formatDate(date) {
 }
 
 function emptyDay() {
-  return Array.from({ length: ROW_COUNT }, () => ({ in: '', out: '' }));
+  return [{ in: '', out: '' }];
+}
+
+function compactRows(rows) {
+  const source = Array.isArray(rows) ? rows.map(r => ({ in: r?.in || '', out: r?.out || '' })) : [];
+  while (source.length > 1 && !source[source.length - 1].in && !source[source.length - 1].out) source.pop();
+  return source.length ? source : emptyDay();
 }
 
 function loadDays() {
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-    return parsed && typeof parsed === 'object' ? parsed : {};
+    if (!parsed || typeof parsed !== 'object') return {};
+    Object.keys(parsed).forEach(key => { parsed[key] = compactRows(parsed[key]); });
+    return parsed;
   } catch {
     return {};
   }
@@ -58,29 +66,28 @@ function saveDays() {
 function getRowsForCurrentDay() {
   const key = dateKey(currentDate);
   if (!Array.isArray(days[key])) days[key] = emptyDay();
-  while (days[key].length < ROW_COUNT) days[key].push({ in: '', out: '' });
-  return days[key].slice(0, ROW_COUNT);
+  days[key] = compactRows(days[key]);
+  return days[key];
 }
 
 function parseTime(value) {
   const text = String(value || '').trim().toLowerCase().replace(/\s+/g, '');
   if (!text) return null;
 
-  let match = text.match(/^(\d{1,2})(?::?(\d{2}))?(am|pm)?$/);
+  const match = text.match(/^(\d{1,2})(?::?(\d{2}))?(am|pm)?$/);
   if (!match) return NaN;
 
   let hour = Number(match[1]);
   const minute = Number(match[2] || 0);
   const meridiem = match[3];
-
   if (minute > 59) return NaN;
 
   if (meridiem) {
     if (hour < 1 || hour > 12) return NaN;
     if (hour === 12) hour = 0;
     if (meridiem === 'pm') hour += 12;
-  } else {
-    if (hour > 23) return NaN;
+  } else if (hour > 23) {
+    return NaN;
   }
 
   return hour * 60 + minute;
@@ -112,7 +119,6 @@ function renderDay() {
   error.textContent = '';
 
   const rows = getRowsForCurrentDay();
-
   rows.forEach((entry, index) => {
     const row = document.createElement('div');
     row.className = 'row-grid data-row';
@@ -134,7 +140,7 @@ function renderDay() {
     rowsEl.appendChild(row);
   });
 
-  updateTotals();
+  renderTotalsOnly();
 }
 
 function makeTimeInput(value, label, index, field) {
@@ -221,14 +227,22 @@ function renderTotalsOnly() {
   });
 }
 
-function updateTotals() {
-  renderTotalsOnly();
-}
-
 function changeDay(delta) {
   currentDate.setDate(currentDate.getDate() + delta);
   currentDate = startOfDay(currentDate);
   renderDay();
+}
+
+function addTimeRow() {
+  const key = dateKey(currentDate);
+  const rows = getRowsForCurrentDay();
+  rows.push({ in: '', out: '' });
+  days[key] = rows;
+  saveDays();
+  renderDay();
+  const inputs = rowsEl.querySelectorAll('input');
+  const newIn = inputs[inputs.length - 2];
+  if (newIn) newIn.focus();
 }
 
 function renderSummary() {
@@ -237,8 +251,8 @@ function renderSummary() {
   summaryList.innerHTML = '';
 
   const entries = Object.entries(days)
-    .map(([key, rows]) => ({ key, rows }))
-    .filter(({ rows }) => Array.isArray(rows) && rows.some(r => r.in || r.out))
+    .map(([key, rows]) => ({ key, rows: compactRows(rows) }))
+    .filter(({ rows }) => rows.some(r => r.in || r.out))
     .sort((a, b) => a.key.localeCompare(b.key));
 
   let grand = 0;
@@ -251,17 +265,17 @@ function renderSummary() {
     const date = new Date(`${key}T00:00:00`);
     const { total } = dayTotal(rows);
     grand += total;
+    const used = rows.filter(r => r.in || r.out);
 
     const block = document.createElement('article');
     block.className = 'summary-day';
-    const used = rows.filter(r => r.in || r.out);
     block.innerHTML = `
-      <div class="summary-day-head">
-        <strong>${formatDate(date)}</strong>
-        <span>${hm(total)} &nbsp; • &nbsp; ${decimal(total)}</span>
-      </div>
+      <div class="summary-day-head"><strong>${formatDate(date)}</strong></div>
       <div class="summary-table">
+        <div class="summary-columns"><span>#</span><span>IN</span><span>OUT</span><strong>HOURS</strong></div>
         ${used.map((r, i) => `<div><span>${i + 1}</span><span>${escapeHtml(r.in || '')}</span><span>${escapeHtml(r.out || '')}</span><strong>${Number.isFinite(workedMinutes(r)) ? hm(workedMinutes(r)) : '—'}</strong></div>`).join('')}
+        <div class="day-total-row"><span></span><span></span><span>Day Total</span><strong>${hm(total)}</strong></div>
+        <div class="day-total-row decimal-row"><span></span><span></span><span>Decimal</span><strong>${decimal(total)}</strong></div>
       </div>`;
     summaryList.appendChild(block);
   });
@@ -281,6 +295,7 @@ function escapeHtml(value) {
 
 prevDay.addEventListener('click', () => changeDay(-1));
 nextDay.addEventListener('click', () => changeDay(1));
+addTimeBtn.addEventListener('click', addTimeRow);
 finishBtn.addEventListener('click', renderSummary);
 backToDay.addEventListener('click', renderDay);
 clearDay.addEventListener('click', () => {
