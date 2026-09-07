@@ -168,7 +168,7 @@ function makeTimeInput(value, label, index, field) {
       days[key] = rows;
       saveDays();
     }
-    renderDay();
+    renderTotalsOnly();
   });
 
   return input;
