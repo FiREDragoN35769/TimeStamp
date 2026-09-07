@@ -1,0 +1,6 @@
+{
+  "appId": "com.firedragon.timestamp",
+  "appName": "TimeStamp",
+  "webDir": ".",
+  "bundledWebRuntime": false
+}
