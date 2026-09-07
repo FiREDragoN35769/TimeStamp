@@ -1,4 +1,5 @@
 const STORAGE_KEY='timestamp.days.v2';
+const RATE_KEY='timestamp.hourlyRate.v1';
 const MAX_ROWS=10;
 const dayTitle=document.getElementById('dayTitle');
 const rowsEl=document.getElementById('rows');
@@ -13,11 +14,14 @@ const summaryView=document.getElementById('summaryView');
 const summaryList=document.getElementById('summaryList');
 const grandHM=document.getElementById('grandHM');
 const grandDecimal=document.getElementById('grandDecimal');
+const hourlyRate=document.getElementById('hourlyRate');
+const weeklyPay=document.getElementById('weeklyPay');
 const backToDay=document.getElementById('backToDay');
 const error=document.getElementById('error');
 
 let currentDate=startOfDay(new Date());
 let days=loadDays();
+hourlyRate.value=localStorage.getItem(RATE_KEY)||'';
 
 function startOfDay(date){const d=new Date(date);d.setHours(0,0,0,0);return d;}
 function dateKey(date){return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;}
@@ -35,78 +39,19 @@ function hm(minutes){const safe=Math.max(0,Math.round(minutes||0));return `${Mat
 function decimal(minutes){return((minutes||0)/60).toFixed(2);}
 function dayTotal(rows){let total=0,invalid=false;(rows||[]).forEach(entry=>{const mins=workedMinutes(entry);if(Number.isNaN(mins))invalid=true;else total+=mins;});return{total,invalid};}
 
-function splitTimeValue(value){
-  const text=String(value||'').trim().toUpperCase();
-  const mer=text.endsWith(' PM')?'PM':'AM';
-  const clock=text.replace(/\s*(AM|PM)$/,'').trim();
-  return {clock,meridiem:mer};
-}
+function splitTimeValue(value){const text=String(value||'').trim().toUpperCase();const mer=text.endsWith(' PM')?'PM':'AM';const clock=text.replace(/\s*(AM|PM)$/,'').trim();return{clock,meridiem:mer};}
+function normalizeDisplayTime(value){const text=String(value||'').trim().toLowerCase().replace(/\s+/g,'');if(!text)return'';const m=text.match(/^(\d{1,2})(?::?(\d{2}))?(am|pm)$/);if(!m)return'';const h=Number(m[1]);const min=Number(m[2]||0);const mer=m[3].toUpperCase();if(h<1||h>12||min>59)return'';return `${h}:${String(min).padStart(2,'0')} ${mer}`;}
 
-function normalizeDisplayTime(value){
-  const text=String(value||'').trim().toLowerCase().replace(/\s+/g,'');if(!text)return'';
-  const m=text.match(/^(\d{1,2})(?::?(\d{2}))?(am|pm)$/);if(!m)return'';
-  const h=Number(m[1]);const min=Number(m[2]||0);const mer=m[3].toUpperCase();
-  if(h<1||h>12||min>59)return'';
-  return `${h}:${String(min).padStart(2,'0')} ${mer}`;
-}
+function makeRow(entry,index){const row=document.createElement('div');row.className='row-grid data-row';const num=document.createElement('div');num.className='row-num';num.textContent=index+1;const inInput=makeTimeInput(entry?.in||'','In time',index,'in');const outInput=makeTimeInput(entry?.out||'','Out time',index,'out');const hours=document.createElement('div');hours.className='row-hours';const mins=workedMinutes(entry);hours.textContent=Number.isFinite(mins)?hm(mins):'—';if(!Number.isFinite(mins))hours.classList.add('bad');row.append(num,inInput,outInput,hours);return row;}
+function makeTimeInput(value,label,index,field){const{clock,meridiem}=splitTimeValue(value);const wrap=document.createElement('div');wrap.className='time-entry';const input=document.createElement('input');input.type='text';input.inputMode='numeric';input.autocomplete='off';input.placeholder='1031';input.setAttribute('aria-label',`${label} row ${index+1}`);input.value=clock;const toggle=document.createElement('button');toggle.type='button';toggle.className='ampm-toggle';toggle.textContent=meridiem;toggle.setAttribute('aria-label',`${label} AM or PM row ${index+1}`);function saveCurrent(normalize=false){const rows=ensureRow(index);const combined=`${input.value} ${toggle.textContent}`.trim();const normalized=normalizeDisplayTime(combined);if(normalize&&normalized){rows[index][field]=normalized;input.value=normalized.replace(/\s*(AM|PM)$/,'').trim();}else{rows[index][field]=normalized||combined;}saveDays();renderTotalsOnly();}input.addEventListener('input',()=>saveCurrent(false));input.addEventListener('blur',()=>saveCurrent(true));toggle.addEventListener('click',()=>{toggle.textContent=toggle.textContent==='AM'?'PM':'AM';saveCurrent(true);});wrap.append(input,toggle);return wrap;}
 
-function makeRow(entry,index){
-  const row=document.createElement('div');row.className='row-grid data-row';
-  const num=document.createElement('div');num.className='row-num';num.textContent=index+1;
-  const inInput=makeTimeInput(entry?.in||'','In time',index,'in');
-  const outInput=makeTimeInput(entry?.out||'','Out time',index,'out');
-  const hours=document.createElement('div');hours.className='row-hours';
-  const mins=workedMinutes(entry);hours.textContent=Number.isFinite(mins)?hm(mins):'—';if(!Number.isFinite(mins))hours.classList.add('bad');
-  row.append(num,inInput,outInput,hours);return row;
-}
-
-function makeTimeInput(value,label,index,field){
-  const {clock,meridiem}=splitTimeValue(value);
-  const wrap=document.createElement('div');wrap.className='time-entry';
-  const input=document.createElement('input');input.type='text';input.inputMode='numeric';input.autocomplete='off';input.placeholder='1031';input.setAttribute('aria-label',`${label} row ${index+1}`);input.value=clock;
-  const toggle=document.createElement('button');toggle.type='button';toggle.className='ampm-toggle';toggle.textContent=meridiem;toggle.setAttribute('aria-label',`${label} AM or PM row ${index+1}`);
-
-  function saveCurrent(normalize=false){
-    const rows=ensureRow(index);
-    const combined=`${input.value} ${toggle.textContent}`.trim();
-    const normalized=normalizeDisplayTime(combined);
-    if(normalize&&normalized){
-      rows[index][field]=normalized;
-      input.value=normalized.replace(/\s*(AM|PM)$/,'').trim();
-    }else{
-      rows[index][field]=normalized||combined;
-    }
-    saveDays();
-    renderTotalsOnly();
-  }
-
-  input.addEventListener('input',()=>saveCurrent(false));
-  input.addEventListener('blur',()=>saveCurrent(true));
-  toggle.addEventListener('click',()=>{
-    toggle.textContent=toggle.textContent==='AM'?'PM':'AM';
-    saveCurrent(true);
-  });
-
-  wrap.append(input,toggle);
-  return wrap;
-}
-
-function buildAddChain(startIndex){
-  if(startIndex>=MAX_ROWS)return null;
-  const details=document.createElement('details');details.className='add-details';
-  const summary=document.createElement('summary');summary.className='add-time';summary.textContent='+ Add new time';
-  const entry=getRowsForCurrentDay()[startIndex]||{in:'',out:''};
-  const row=makeRow(entry,startIndex);
-  details.append(summary,row);
-  const next=buildAddChain(startIndex+1);if(next)details.appendChild(next);
-  return details;
-}
-
+function buildAddChain(startIndex){if(startIndex>=MAX_ROWS)return null;const details=document.createElement('details');details.className='add-details';const summary=document.createElement('summary');summary.className='add-time';summary.textContent='+ Add new time';const entry=getRowsForCurrentDay()[startIndex]||{in:'',out:''};const row=makeRow(entry,startIndex);details.append(summary,row);const next=buildAddChain(startIndex+1);if(next)details.appendChild(next);return details;}
 function renderDay(){summaryView.classList.add('hidden');document.querySelector('.timesheet-card').classList.remove('hidden');dayTitle.textContent=formatDate(currentDate);rowsEl.innerHTML='';addRowsHost.innerHTML='';error.textContent='';const rows=compactRows(getRowsForCurrentDay());days[dateKey(currentDate)]=rows;rows.forEach((entry,index)=>rowsEl.appendChild(makeRow(entry,index)));const chain=buildAddChain(rows.length);if(chain)addRowsHost.appendChild(chain);renderTotalsOnly();}
 function renderTotalsOnly(){const rows=getRowsForCurrentDay();const{total,invalid}=dayTotal(rows);totalHM.textContent=hm(total);totalDecimal.textContent=decimal(total);error.textContent=invalid?'One or more times are not valid yet.':'';document.querySelectorAll('.data-row').forEach((row,index)=>{const mins=workedMinutes(rows[index]);const hours=row.querySelector('.row-hours');if(hours){hours.textContent=Number.isFinite(mins)?hm(mins):'—';hours.classList.toggle('bad',!Number.isFinite(mins));}});}
 function changeDay(delta){currentDate.setDate(currentDate.getDate()+delta);currentDate=startOfDay(currentDate);renderDay();}
-function renderSummary(){document.querySelector('.timesheet-card').classList.add('hidden');summaryView.classList.remove('hidden');summaryList.innerHTML='';const entries=Object.entries(days).map(([key,rows])=>({key,rows:compactRows(rows)})).filter(({rows})=>rows.some(r=>r.in||r.out)).sort((a,b)=>a.key.localeCompare(b.key));let grand=0;if(!entries.length)summaryList.innerHTML='<p class="empty">No time entered yet.</p>';entries.forEach(({key,rows})=>{const date=new Date(`${key}T00:00:00`),{total}=dayTotal(rows);grand+=total;const used=rows.filter(r=>r.in||r.out);const block=document.createElement('article');block.className='summary-day';block.innerHTML=`<div class="summary-day-head"><strong>${formatDate(date)}</strong></div><div class="summary-table"><div class="summary-columns"><span>#</span><span>IN</span><span>OUT</span><strong>HOURS</strong></div>${used.map((r,i)=>`<div><span>${i+1}</span><span>${escapeHtml(r.in||'')}</span><span>${escapeHtml(r.out||'')}</span><strong>${Number.isFinite(workedMinutes(r))?hm(workedMinutes(r)):'—'}</strong></div>`).join('')}<div class="day-total-row"><span></span><span></span><span>Day Total</span><strong>${hm(total)}</strong></div><div class="day-total-row decimal-row"><span></span><span></span><span>Decimal</span><strong>${decimal(total)}</strong></div></div>`;summaryList.appendChild(block);});grandHM.textContent=hm(grand);grandDecimal.textContent=decimal(grand);}
+function renderWeeklyPay(grandMinutes){const rate=Math.max(0,Number(hourlyRate.value)||0);weeklyPay.textContent=`$${((grandMinutes/60)*rate).toFixed(2)}`;}
+function renderSummary(){document.querySelector('.timesheet-card').classList.add('hidden');summaryView.classList.remove('hidden');summaryList.innerHTML='';const entries=Object.entries(days).map(([key,rows])=>({key,rows:compactRows(rows)})).filter(({rows})=>rows.some(r=>r.in||r.out)).sort((a,b)=>a.key.localeCompare(b.key));let grand=0;if(!entries.length)summaryList.innerHTML='<p class="empty">No time entered yet.</p>';entries.forEach(({key,rows})=>{const date=new Date(`${key}T00:00:00`),{total}=dayTotal(rows);grand+=total;const used=rows.filter(r=>r.in||r.out);const block=document.createElement('article');block.className='summary-day';block.innerHTML=`<div class="summary-day-head"><strong>${formatDate(date)}</strong></div><div class="summary-table"><div class="summary-columns"><span>#</span><span>IN</span><span>OUT</span><strong>HOURS</strong></div>${used.map((r,i)=>`<div><span>${i+1}</span><span>${escapeHtml(r.in||'')}</span><span>${escapeHtml(r.out||'')}</span><strong>${Number.isFinite(workedMinutes(r))?hm(workedMinutes(r)):'—'}</strong></div>`).join('')}<div class="day-total-row"><span></span><span></span><span>Day Total</span><strong>${hm(total)}</strong></div><div class="day-total-row decimal-row"><span></span><span></span><span>Decimal</span><strong>${decimal(total)}</strong></div></div>`;summaryList.appendChild(block);});grandHM.textContent=hm(grand);grandDecimal.textContent=decimal(grand);renderWeeklyPay(grand);}
 function escapeHtml(value){return String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');}
 
-prevDay.addEventListener('click',()=>changeDay(-1));nextDay.addEventListener('click',()=>changeDay(1));finishBtn.addEventListener('click',renderSummary);backToDay.addEventListener('click',renderDay);clearDay.addEventListener('click',()=>{days[dateKey(currentDate)]=emptyDay();saveDays();renderDay();});
+prevDay.addEventListener('click',()=>changeDay(-1));nextDay.addEventListener('click',()=>changeDay(1));finishBtn.addEventListener('click',renderSummary);backToDay.addEventListener('click',renderDay);clearDay.addEventListener('click',()=>{days[dateKey(currentDate)]=emptyDay();saveDays();renderDay();});hourlyRate.addEventListener('input',()=>{localStorage.setItem(RATE_KEY,hourlyRate.value);const totalHours=Number(grandDecimal.textContent)||0;weeklyPay.textContent=`$${(totalHours*(Number(hourlyRate.value)||0)).toFixed(2)}`;});
 renderDay();
