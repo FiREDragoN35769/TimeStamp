@@ -6,7 +6,6 @@ const totalHM = document.getElementById('totalHM');
 const totalDecimal = document.getElementById('totalDecimal');
 const prevDay = document.getElementById('prevDay');
 const nextDay = document.getElementById('nextDay');
-const addTimeBtn = document.getElementById('addTimeBtn');
 const clearDay = document.getElementById('clearDay');
 const finishBtn = document.getElementById('finishBtn');
 const summaryView = document.getElementById('summaryView');
@@ -232,15 +231,22 @@ function changeDay(delta) {
 
 function addTimeRow() {
   const key = dateKey(currentDate);
-  const rows = getRowsForCurrentDay();
-  rows.push({ in: '', out: '' });
-  days[key] = rows;
+  if (!Array.isArray(days[key]) || !days[key].length) days[key] = emptyDay();
+  days[key].push({ in: '', out: '' });
   saveDays();
   renderDay();
-  const inputs = rowsEl.querySelectorAll('input');
-  const newIn = inputs[inputs.length - 2];
-  if (newIn) newIn.focus();
+
+  requestAnimationFrame(() => {
+    const rowInputs = rowsEl.querySelectorAll('.data-row input');
+    const newIn = rowInputs[rowInputs.length - 2];
+    if (newIn) {
+      newIn.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      newIn.focus();
+    }
+  });
 }
+
+window.addTimeRow = addTimeRow;
 
 function renderSummary() {
   document.querySelector('.timesheet-card').classList.add('hidden');
@@ -292,7 +298,6 @@ function escapeHtml(value) {
 
 prevDay.addEventListener('click', () => changeDay(-1));
 nextDay.addEventListener('click', () => changeDay(1));
-addTimeBtn.addEventListener('click', addTimeRow);
 finishBtn.addEventListener('click', renderSummary);
 backToDay.addEventListener('click', renderDay);
 clearDay.addEventListener('click', () => {
