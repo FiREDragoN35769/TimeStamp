@@ -1,0 +1,34 @@
+format_version: '26'
+default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
+
+workflows:
+  primary:
+    steps:
+    - activate-ssh-key@4:
+        run_if: '{{getenv "SSH_RSA_PRIVATE_KEY" | ne ""}}'
+    - git-clone@8: {}
+    - script@1:
+        title: Build TimeStamp Android APK
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            set -ex
+
+            npm install
+
+            if [ ! -d "android" ]; then
+              npx cap add android
+            fi
+
+            npx cap sync android
+            cd android
+            chmod +x gradlew
+            ./gradlew assembleDebug
+
+            mkdir -p "$BITRISE_DEPLOY_DIR"
+            cp app/build/outputs/apk/debug/app-debug.apk "$BITRISE_DEPLOY_DIR/TimeStamp-debug.apk"
+    - deploy-to-bitrise-io@2: {}
+
+meta:
+  bitrise.io:
+    stack: linux-docker-android-22.04
