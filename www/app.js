@@ -20,16 +20,30 @@ const backToDay=document.getElementById('backToDay');
 const error=document.getElementById('error');
 
 let currentDate=startOfDay(new Date());
+const EMPLOYEE_KEY='timestamp.employees.v1';
+const ACTIVE_KEY='timestamp.activeEmployee.v1';
+const employeeSelect=document.getElementById('employeeSelect');
+const addEmployee=document.getElementById('addEmployee');
+const deleteEmployee=document.getElementById('deleteEmployee');
+function loadEmployees(){try{const data=JSON.parse(localStorage.getItem(EMPLOYEE_KEY)||'null');if(Array.isArray(data)&&data.length)return data.filter(e=>e&&typeof e.id==='string'&&typeof e.name==='string');}catch{}return [{id:'default',name:'Employee 1'}];}
+let employees=loadEmployees();
+let activeEmployee=employees.some(e=>e.id===localStorage.getItem(ACTIVE_KEY))?localStorage.getItem(ACTIVE_KEY):employees[0].id;
+function employeeDaysKey(){return 'timestamp.employee.days.'+activeEmployee;}
+function employeeRateKey(){return 'timestamp.employee.rate.'+activeEmployee;}
+function persistEmployees(){localStorage.setItem(EMPLOYEE_KEY,JSON.stringify(employees));localStorage.setItem(ACTIVE_KEY,activeEmployee);}
+function refreshEmployees(){employeeSelect.replaceChildren();employees.forEach(e=>{const o=document.createElement('option');o.value=e.id;o.textContent=e.name;employeeSelect.appendChild(o);});employeeSelect.value=activeEmployee;deleteEmployee.disabled=employees.length===1;}
+function switchEmployee(id){if(!employees.some(e=>e.id===id))return;activeEmployee=id;persistEmployees();days=loadDays();hourlyRate.value=localStorage.getItem(employeeRateKey())||'';refreshEmployees();renderDay();}
 let days=loadDays();
-hourlyRate.value=localStorage.getItem(RATE_KEY)||'';
+persistEmployees();refreshEmployees();
+hourlyRate.value=localStorage.getItem(employeeRateKey())||'';
 
 function startOfDay(date){const d=new Date(date);d.setHours(0,0,0,0);return d;}
 function dateKey(date){return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;}
 function formatDate(date){return new Intl.DateTimeFormat(undefined,{weekday:'long',month:'short',day:'numeric',year:'numeric'}).format(date);}
 function emptyDay(){return [{in:'',out:''}];}
 function compactRows(rows){const source=Array.isArray(rows)?rows.map(r=>({in:r?.in||'',out:r?.out||''})):[];while(source.length>1&&!source[source.length-1].in&&!source[source.length-1].out)source.pop();return source.length?source:emptyDay();}
-function loadDays(){try{const p=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');return p&&typeof p==='object'?p:{}}catch{return{}}}
-function saveDays(){localStorage.setItem(STORAGE_KEY,JSON.stringify(days));}
+function loadDays(){try{const p=JSON.parse(localStorage.getItem(employeeDaysKey())||(activeEmployee==='default'?localStorage.getItem(STORAGE_KEY):null)||'{}');return p&&typeof p==='object'?p:{}}catch{return{}}}
+function saveDays(){localStorage.setItem(employeeDaysKey(),JSON.stringify(days));}
 function getRowsForCurrentDay(){const key=dateKey(currentDate);if(!Array.isArray(days[key])||!days[key].length)days[key]=emptyDay();return days[key];}
 function ensureRow(index){const key=dateKey(currentDate);const rows=getRowsForCurrentDay();while(rows.length<=index)rows.push({in:'',out:''});days[key]=rows;return rows;}
 
@@ -50,8 +64,11 @@ function renderDay(){summaryView.classList.add('hidden');document.querySelector(
 function renderTotalsOnly(){const rows=getRowsForCurrentDay();const{total,invalid}=dayTotal(rows);totalHM.textContent=hm(total);totalDecimal.textContent=decimal(total);error.textContent=invalid?'One or more times are not valid yet.':'';document.querySelectorAll('.data-row').forEach((row,index)=>{const mins=workedMinutes(rows[index]);const hours=row.querySelector('.row-hours');if(hours){hours.textContent=Number.isFinite(mins)?hm(mins):'—';hours.classList.toggle('bad',!Number.isFinite(mins));}});}
 function changeDay(delta){currentDate.setDate(currentDate.getDate()+delta);currentDate=startOfDay(currentDate);renderDay();}
 function renderWeeklyPay(grandMinutes){const rate=Math.max(0,Number(hourlyRate.value)||0);weeklyPay.textContent=`$${((grandMinutes/60)*rate).toFixed(2)}`;}
-function renderSummary(){document.querySelector('.timesheet-card').classList.add('hidden');summaryView.classList.remove('hidden');summaryList.innerHTML='';const entries=Object.entries(days).map(([key,rows])=>({key,rows:compactRows(rows)})).filter(({rows})=>rows.some(r=>r.in||r.out)).sort((a,b)=>a.key.localeCompare(b.key));let grand=0;if(!entries.length)summaryList.innerHTML='<p class="empty">No time entered yet.</p>';entries.forEach(({key,rows})=>{const date=new Date(`${key}T00:00:00`),{total}=dayTotal(rows);grand+=total;const used=rows.filter(r=>r.in||r.out);const block=document.createElement('article');block.className='summary-day';block.innerHTML=`<div class="summary-day-head"><strong>${formatDate(date)}</strong></div><div class="summary-table"><div class="summary-columns"><span>#</span><span>IN</span><span>OUT</span><strong>HOURS</strong></div>${used.map((r,i)=>`<div><span>${i+1}</span><span>${escapeHtml(r.in||'')}</span><span>${escapeHtml(r.out||'')}</span><strong>${Number.isFinite(workedMinutes(r))?hm(workedMinutes(r)):'—'}</strong></div>`).join('')}<div class="day-total-row"><span></span><span></span><span>Day Total</span><strong>${hm(total)}</strong></div><div class="day-total-row decimal-row"><span></span><span></span><span>Decimal</span><strong>${decimal(total)}</strong></div></div>`;summaryList.appendChild(block);});grandHM.textContent=hm(grand);grandDecimal.textContent=decimal(grand);renderWeeklyPay(grand);}
+function renderSummary(){document.querySelector('.timesheet-card').classList.add('hidden');summaryView.classList.remove('hidden');summaryList.innerHTML='';const weekStart=startOfDay(currentDate);weekStart.setDate(weekStart.getDate()-((weekStart.getDay()+6)%7));const weekEnd=startOfDay(weekStart);weekEnd.setDate(weekEnd.getDate()+7);const firstKey=dateKey(weekStart),endKey=dateKey(weekEnd);const entries=Object.entries(days).filter(([key])=>key>=firstKey&&key<endKey).map(([key,rows])=>({key,rows:compactRows(rows)})).filter(({rows})=>rows.some(r=>r.in||r.out)).sort((a,b)=>a.key.localeCompare(b.key));let grand=0;if(!entries.length)summaryList.innerHTML='<p class="empty">No time entered yet.</p>';entries.forEach(({key,rows})=>{const date=new Date(`${key}T00:00:00`),{total}=dayTotal(rows);grand+=total;const used=rows.filter(r=>r.in||r.out);const block=document.createElement('article');block.className='summary-day';block.innerHTML=`<div class="summary-day-head"><strong>${formatDate(date)}</strong></div><div class="summary-table"><div class="summary-columns"><span>#</span><span>IN</span><span>OUT</span><strong>HOURS</strong></div>${used.map((r,i)=>`<div><span>${i+1}</span><span>${escapeHtml(r.in||'')}</span><span>${escapeHtml(r.out||'')}</span><strong>${Number.isFinite(workedMinutes(r))?hm(workedMinutes(r)):'—'}</strong></div>`).join('')}<div class="day-total-row"><span></span><span></span><span>Day Total</span><strong>${hm(total)}</strong></div><div class="day-total-row decimal-row"><span></span><span></span><span>Decimal</span><strong>${decimal(total)}</strong></div></div>`;summaryList.appendChild(block);});grandHM.textContent=hm(grand);grandDecimal.textContent=decimal(grand);renderWeeklyPay(grand);}
 function escapeHtml(value){return String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');}
 
-prevDay.addEventListener('click',()=>changeDay(-1));nextDay.addEventListener('click',()=>changeDay(1));finishBtn.addEventListener('click',renderSummary);backToDay.addEventListener('click',renderDay);clearDay.addEventListener('click',()=>{days[dateKey(currentDate)]=emptyDay();saveDays();renderDay();});hourlyRate.addEventListener('input',()=>{localStorage.setItem(RATE_KEY,hourlyRate.value);const totalHours=Number(grandDecimal.textContent)||0;weeklyPay.textContent=`$${(totalHours*(Number(hourlyRate.value)||0)).toFixed(2)}`;});
+employeeSelect.addEventListener('change',()=>switchEmployee(employeeSelect.value));
+addEmployee.addEventListener('click',()=>{const name=prompt('Employee name:');if(!name||!name.trim())return;const id='e'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);employees.push({id,name:name.trim().slice(0,80)});switchEmployee(id);});
+deleteEmployee.addEventListener('click',()=>{if(employees.length<=1)return;const current=employees.find(e=>e.id===activeEmployee);if(!confirm('Delete '+current.name+' and all their saved hours?'))return;const id=activeEmployee;employees=employees.filter(e=>e.id!==id);localStorage.removeItem('timestamp.employee.days.'+id);localStorage.removeItem('timestamp.employee.rate.'+id);switchEmployee(employees[0].id);});
+prevDay.addEventListener('click',()=>changeDay(-1));nextDay.addEventListener('click',()=>changeDay(1));finishBtn.addEventListener('click',renderSummary);backToDay.addEventListener('click',renderDay);clearDay.addEventListener('click',()=>{days[dateKey(currentDate)]=emptyDay();saveDays();renderDay();});hourlyRate.addEventListener('input',()=>{localStorage.setItem(employeeRateKey(),hourlyRate.value);const totalHours=Number(grandDecimal.textContent)||0;weeklyPay.textContent=`$${(totalHours*(Number(hourlyRate.value)||0)).toFixed(2)}`;});
 renderDay();
