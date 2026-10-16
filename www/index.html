@@ -9,6 +9,8 @@
 </head>
 <body>
   <main class="app-shell">
+    <header class="brand-header"><div class="brand-emblem">⌛</div><div><h1>TimE StamP</h1><p>TIME TODAY ✦ A BETTER TOMORROW</p></div></header>
+    <div class="employee-bar"><label for="employeeSelect">Employee</label><select id="employeeSelect"></select><button id="addEmployee" type="button">+ Add</button><button id="deleteEmployee" type="button">Delete</button></div>
     <header class="topbar">
       <button id="prevDay" class="nav-btn" type="button">‹ Previous</button>
       <div class="title-wrap">
@@ -40,14 +42,14 @@
     <section id="summaryView" class="summary-card hidden">
       <div class="summary-head">
         <div>
-          <h2>All Days</h2>
-          <p>Every saved day with vertical totals.</p>
+          <h2>Weekly Timesheet</h2>
+          <p>Hours for the selected employee and week.</p>
         </div>
         <button id="backToDay" type="button" class="secondary small">Back</button>
       </div>
       <div id="summaryList" class="summary-list"></div>
       <div class="grand-total">
-        <span>All Days Total</span>
+        <span>Week Total</span>
         <div><small>H:MM</small><strong id="grandHM">0:00</strong></div>
         <div><small>Decimal</small><strong id="grandDecimal">0.00</strong></div>
       </div>
