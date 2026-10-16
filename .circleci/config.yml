@@ -1,0 +1,31 @@
+version: 2.1
+jobs:
+  android-debug:
+    docker:
+      - image: cimg/android:2025.04
+    resource_class: large
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: npm install --no-audit --no-fund
+      - run:
+          name: Prepare Android project
+          command: |
+            if [ ! -f android/gradlew ]; then
+              npx cap add android
+            fi
+            npx cap sync android
+      - run:
+          name: Build debug APK
+          command: |
+            cd android
+            chmod +x gradlew
+            ./gradlew assembleDebug --no-daemon
+      - store_artifacts:
+          path: android/app/build/outputs/apk/debug/
+          destination: apk
+workflows:
+  build-android:
+    jobs:
+      - android-debug
